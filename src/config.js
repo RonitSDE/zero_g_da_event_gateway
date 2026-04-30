@@ -32,5 +32,15 @@ export const config = {
   writerGrpcMethod: (process.env.DA_WRITER_GRPC_METHOD || process.env.DA_GRPC_METHOD || "").trim(),
   writerGrpcPayloadField: (process.env.DA_WRITER_GRPC_PAYLOAD_FIELD || "data").trim(),
   writerGrpcExtraJson: (process.env.DA_WRITER_GRPC_EXTRA_JSON || "").trim(),
-  writerGrpcUseTls: (process.env.DA_WRITER_GRPC_USE_TLS || "false").trim().toLowerCase() === "true"
+  writerGrpcUseTls: (process.env.DA_WRITER_GRPC_USE_TLS || "false").trim().toLowerCase() === "true",
+  writerGrpcStatusMethod: (process.env.DA_WRITER_GRPC_STATUS_METHOD || "GetBlobStatus").trim(),
+  writerGrpcStatusPollIntervalMs: Math.max(asInt(process.env.DA_WRITER_GRPC_STATUS_POLL_INTERVAL_MS, 2500), 200),
+  writerGrpcStatusPollMaxAttempts: Math.max(asInt(process.env.DA_WRITER_GRPC_STATUS_POLL_MAX_ATTEMPTS, 12), 1),
+  redisUrl: (process.env.REDIS_URL || "").trim(),
+  redisKeyPrefix: (process.env.REDIS_KEY_PREFIX || "ZERO-G-DA-EVENT:").trim(),
+  maxRetries: Math.max(asInt(process.env.MAX_RETRIES, 3), 1),
+  retryBackoffMs: Math.max(asInt(process.env.RETRY_BACKOFF_MS, 2000), 100),
+  bullConcurrency: Math.max(asInt(process.env.BULLMQ_CONCURRENCY, 10), 1),
+  bullRemoveOnComplete: Math.max(asInt(process.env.BULLMQ_REMOVE_ON_COMPLETE, 1000), 1),
+  bullRemoveOnFail: Math.max(asInt(process.env.BULLMQ_REMOVE_ON_FAIL, 5000), 1)
 };
