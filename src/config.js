@@ -16,11 +16,14 @@ export const config = {
   flushIntervalMs: Math.max(asInt(process.env.DA_FLUSH_INTERVAL_MS, 5000), 500),
   maxEventAgeMs: Math.max(asInt(process.env.DA_EVENT_MAX_AGE_MS, 120000), 5000),
   timeoutMs: Math.max(asInt(process.env.DA_TIMEOUT_MS, 12000), 1000),
-  targetMode: (process.env.DA_TARGET_MODE || "mock").trim().toLowerCase(),
+  targetMode: (process.env.DA_TARGET_MODE || "local").trim().toLowerCase(),
   upstreamUrl: (process.env.DA_UPSTREAM_URL || "").trim(),
   upstreamApiKey: (process.env.DA_UPSTREAM_API_KEY || "").trim(),
   grpcEndpoint: (process.env.DA_GRPC_ENDPOINT || "127.0.0.1:51001").trim(),
   grpcProtoPath: (process.env.DA_GRPC_PROTO_PATH || "").trim(),
   grpcService: (process.env.DA_GRPC_SERVICE || "").trim(),
-  grpcMethod: (process.env.DA_GRPC_METHOD || "").trim()
+  grpcMethod: (process.env.DA_GRPC_METHOD || "").trim(),
+  writerMode: (process.env.DA_WRITER_MODE || "mock").trim().toLowerCase(),
+  writerUpstreamUrl: (process.env.DA_WRITER_UPSTREAM_URL || "").trim(),
+  writerApiKey: (process.env.DA_WRITER_UPSTREAM_API_KEY || "").trim()
 };

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { config } from "./config.js";
+import { submitBatchToDa } from "./writer.js";
 
 const nowIso = () => new Date().toISOString();
 
@@ -55,6 +56,10 @@ async function sendGrpc() {
 
 export async function deliverBatch(batch) {
   const mode = config.targetMode;
+  if (mode === "local") {
+    const result = await submitBatchToDa(batch);
+    return { ok: true, mode: `local:${result.mode}`, reference: result.reference, batchId: randomUUID() };
+  }
   if (mode === "mock") {
     return { ok: true, mode, reference: mockReference(batch), batchId: randomUUID() };
   }

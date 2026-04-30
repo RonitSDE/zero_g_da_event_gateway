@@ -6,10 +6,12 @@ Shared event ingestion service for multiple games (`guess_the_ai`, `highwayHustl
 
 - Accepts events over HTTP (`/v1/events`, `/v1/events/batch`)
 - Queues and batches events
-- Delivers batches to a configurable target:
-  - `mock` (default, local references)
-  - `http` (real upstream endpoint)
-  - `grpc` (placeholder; requires your exact proto wiring)
+- Delivers batches using a configurable strategy:
+  - `DA_TARGET_MODE=local` (recommended single-service mode)
+    - `DA_WRITER_MODE=mock` (default test mode)
+    - `DA_WRITER_MODE=http` (forward to real DA writer upstream)
+    - `DA_WRITER_MODE=grpc` (placeholder; requires exact proto wiring)
+  - legacy direct modes still available: `mock`, `http`, `grpc`
 - Stores event/batch history in Mongo (optional but recommended)
 
 ## Event format
@@ -68,12 +70,23 @@ From any backend service:
 - Send `{ game, event, data }`
 - Keep it fire-and-forget (HTTP 202)
 
-## Real 0G DA path
+## Best-practice config
 
-For real 0G DA delivery, set:
+Single-service (recommended for your setup):
 
-- `DA_TARGET_MODE=http`
-- `DA_UPSTREAM_URL=<your-da-writer-endpoint>`
+```env
+DA_TARGET_MODE=local
+DA_WRITER_MODE=mock
+```
 
-That upstream should be connected to your 0G DA client/encoder stack.
+When ready for real DA:
+
+```env
+DA_TARGET_MODE=local
+DA_WRITER_MODE=http
+DA_WRITER_UPSTREAM_URL=https://<your-da-writer-endpoint>/v1/submit
+DA_WRITER_UPSTREAM_API_KEY=<optional>
+```
+
+The upstream endpoint should be connected to your 0G DA client/encoder stack.
 
