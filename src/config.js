@@ -25,5 +25,12 @@ export const config = {
   grpcMethod: (process.env.DA_GRPC_METHOD || "").trim(),
   writerMode: (process.env.DA_WRITER_MODE || "mock").trim().toLowerCase(),
   writerUpstreamUrl: (process.env.DA_WRITER_UPSTREAM_URL || "").trim(),
-  writerApiKey: (process.env.DA_WRITER_UPSTREAM_API_KEY || "").trim()
+  writerApiKey: (process.env.DA_WRITER_UPSTREAM_API_KEY || "").trim(),
+  writerGrpcEndpoint: (process.env.DA_WRITER_GRPC_ENDPOINT || process.env.DA_GRPC_ENDPOINT || "127.0.0.1:51001").trim(),
+  writerGrpcProtoPath: (process.env.DA_WRITER_GRPC_PROTO_PATH || process.env.DA_GRPC_PROTO_PATH || "").trim(),
+  writerGrpcService: (process.env.DA_WRITER_GRPC_SERVICE || process.env.DA_GRPC_SERVICE || "").trim(),
+  writerGrpcMethod: (process.env.DA_WRITER_GRPC_METHOD || process.env.DA_GRPC_METHOD || "").trim(),
+  writerGrpcPayloadField: (process.env.DA_WRITER_GRPC_PAYLOAD_FIELD || "data").trim(),
+  writerGrpcExtraJson: (process.env.DA_WRITER_GRPC_EXTRA_JSON || "").trim(),
+  writerGrpcUseTls: (process.env.DA_WRITER_GRPC_USE_TLS || "false").trim().toLowerCase() === "true"
 };

@@ -1,4 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
+import path from "node:path";
+import grpc from "@grpc/grpc-js";
+import protoLoader from "@grpc/proto-loader";
 import { config } from "./config.js";
 
 const nowIso = () => new Date().toISOString();
@@ -48,10 +51,66 @@ async function writeViaHttp(events) {
   }
 }
 
-async function writeViaGrpc() {
-  throw new Error(
-    "DA_WRITER_MODE=grpc requires project-specific proto wiring. Configure DA_WRITER_MODE=mock or http for now."
-  );
+async function writeViaGrpc(events) {
+  if (!config.writerGrpcProtoPath || !config.writerGrpcService || !config.writerGrpcMethod) {
+    throw new Error(
+      "DA_WRITER_GRPC_PROTO_PATH, DA_WRITER_GRPC_SERVICE, and DA_WRITER_GRPC_METHOD are required for DA_WRITER_MODE=grpc"
+    );
+  }
+
+  const protoPath = path.isAbsolute(config.writerGrpcProtoPath)
+    ? config.writerGrpcProtoPath
+    : path.resolve(process.cwd(), config.writerGrpcProtoPath);
+
+  const packageDefinition = await protoLoader.load(protoPath, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true
+  });
+  const loaded = grpc.loadPackageDefinition(packageDefinition);
+  const ServiceCtor = config.writerGrpcService
+    .split(".")
+    .reduce((acc, key) => acc?.[key], loaded);
+
+  if (!ServiceCtor) {
+    throw new Error(`gRPC service not found: ${config.writerGrpcService}`);
+  }
+
+  const credentials = config.writerGrpcUseTls
+    ? grpc.credentials.createSsl()
+    : grpc.credentials.createInsecure();
+  const client = new ServiceCtor(config.writerGrpcEndpoint, credentials);
+
+  const payloadRaw = Buffer.from(JSON.stringify(events));
+  const payloadBase64 = payloadRaw.toString("base64");
+
+  let extra = {};
+  if (config.writerGrpcExtraJson) {
+    try {
+      extra = JSON.parse(config.writerGrpcExtraJson);
+    } catch {
+      throw new Error("Invalid DA_WRITER_GRPC_EXTRA_JSON; must be valid JSON");
+    }
+  }
+
+  const request = {
+    ...extra,
+    [config.writerGrpcPayloadField]: payloadRaw
+  };
+
+  const response = await new Promise((resolve, reject) => {
+    client[config.writerGrpcMethod](request, (error, res) => {
+      if (error) return reject(error);
+      return resolve(res || {});
+    });
+  }).finally(() => {
+    client.close();
+  });
+
+  const candidate = parseReference(response);
+  return candidate || `grpc-da-${createHash("sha256").update(payloadBase64).digest("hex").slice(0, 20)}`;
 }
 
 export async function submitBatchToDa(events) {

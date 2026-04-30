@@ -83,10 +83,28 @@ When ready for real DA:
 
 ```env
 DA_TARGET_MODE=local
+DA_WRITER_MODE=grpc
+DA_WRITER_GRPC_ENDPOINT=127.0.0.1:51001
+DA_WRITER_GRPC_PROTO_PATH=/app/protos/disperser.proto
+DA_WRITER_GRPC_SERVICE=disperser.Disperser
+DA_WRITER_GRPC_METHOD=DisperseBlob
+DA_WRITER_GRPC_PAYLOAD_FIELD=data
+# Optional extra request fields as JSON string, example:
+# DA_WRITER_GRPC_EXTRA_JSON={"security_params":[{"quorum_id":0,"adversary_threshold":33,"quorum_threshold":66}]}
+```
+
+If you prefer HTTP forwarding instead of direct gRPC:
+
+```env
+DA_TARGET_MODE=local
 DA_WRITER_MODE=http
 DA_WRITER_UPSTREAM_URL=https://<your-da-writer-endpoint>/v1/submit
 DA_WRITER_UPSTREAM_API_KEY=<optional>
 ```
 
-The upstream endpoint should be connected to your 0G DA client/encoder stack.
+### Notes for 0G DA
+
+- `DA_WRITER_MODE=grpc` now performs a real gRPC call using your configured proto/service/method.
+- You must provide the correct proto and method signature from your DA client setup.
+- If the request schema differs, set `DA_WRITER_GRPC_PAYLOAD_FIELD` and `DA_WRITER_GRPC_EXTRA_JSON` accordingly.
 
