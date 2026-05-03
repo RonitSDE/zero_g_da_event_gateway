@@ -1,50 +1,90 @@
-# DA Event Gateway
+# 0G DA Event Gateway
 
-Shared event ingestion service for multiple games (`guess_the_ai`, `highwayHustle`, etc).
+Production event ingestion gateway for Karn games (`highwayHustle`, `guessTheAI`, `warzoneWarriors`).
 
-## What it does
+Accepts events over HTTP, batches them via BullMQ, and submits to the **0G DA disperser over gRPC**. Every event gets a `storageRoot`, `epoch`, and `quorumId` from the DA layer — verifiable proof that the event was committed on-chain.
 
-- Accepts events over HTTP (`/v1/events`, `/v1/events/batch`)
-- Queues and batches events
-- Delivers batches using a configurable strategy:
-  - `DA_TARGET_MODE=local` (recommended single-service mode)
-    - `DA_WRITER_MODE=mock` (default test mode)
-    - `DA_WRITER_MODE=http` (forward to real DA writer upstream)
-    - `DA_WRITER_MODE=grpc` (placeholder; requires exact proto wiring)
-  - legacy direct modes still available: `mock`, `http`, `grpc`
-- Stores event/batch history in Mongo (optional but recommended)
+## Architecture
+
+```
+Game backend  →  POST /v1/events
+                      ↓
+              BullMQ + Valkey (batch, retry)
+                      ↓
+              0G DA disperser (gRPC: DisperseBlob)
+                      ↓  polls GetBlobStatus
+              MongoDB (storageRoot, epoch, quorumId)
+```
 
 ## Event format
 
+Single event:
+
 ```json
 {
-  "game": "warzonewariors",
-  "event": "session",
+  "game": "warzoneWarriors",
+  "event": "session.completed",
   "data": {
     "sessionId": "abc-123",
     "walletAddress": "0x...",
-    "action": "login"
+    "score": 4200
   }
 }
 ```
 
-Batch format:
+Batch:
 
 ```json
 {
   "events": [
-    { "game": "guess_the_ai", "event": "session.login", "data": { "walletAddress": "0x1" } },
-    { "game": "highwayHustle", "event": "session.start", "data": { "sessionId": "s2" } }
+    { "game": "highwayHustle", "event": "score.best", "data": { "walletAddress": "0x1", "score": 9900 } },
+    { "game": "guessTheAI", "event": "round.completed", "data": { "walletAddress": "0x2", "correct": true } }
   ]
 }
 ```
 
-## Quick start
+## API
+
+All endpoints (except `/health` and `/v1/da/health`) require:
+
+```
+Authorization: Bearer <INGEST_API_KEY>
+```
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Queue stats |
+| `GET` | `/v1/da/health` | DA writer mode, gRPC target, auth status |
+| `POST` | `/v1/events` | Ingest single or batch events |
+| `POST` | `/v1/events/batch` | Explicit batch ingestion |
+| `GET` | `/v1/da/status/:eventId` | Full event status |
+| `GET` | `/v1/da/proof/:eventId` | DA proof (storageRoot, epoch, quorumId) |
+| `POST` | `/v1/da/retrieve/:eventId` | Retrieve raw blob from DA |
+| `GET` | `/v1/failed-events` | List dead-letter events |
+| `POST` | `/v1/failed-events/:eventId/replay` | Replay a failed event |
+
+### Proof response
+
+```json
+{
+  "eventId": "550e8400-e29b-41d4-a716-446655440000",
+  "daStatus": "CONFIRMED",
+  "storageRoot": "Abc123...base64...",
+  "epoch": 12,
+  "quorumId": 0,
+  "daReference": "grpc-da-a1b2c3d4e5f6...",
+  "confirmedAt": "2026-05-03T10:22:41.000Z"
+}
+```
+
+## Quick start (local testing)
 
 ```bash
-cd da_event_gateway
+cd zero_g_da_event_gateway
 npm install
 cp .env.example .env
+# Edit .env: set MONGO_URL, REDIS_URL, INGEST_API_KEY
+# For local testing only: set DA_WRITER_MODE=mock
 npm run dev
 ```
 
@@ -54,57 +94,98 @@ Health check:
 curl http://localhost:3300/health
 ```
 
-Ingest single event:
+Ingest an event:
 
 ```bash
 curl -X POST http://localhost:3300/v1/events \
+  -H "Authorization: Bearer <INGEST_API_KEY>" \
   -H "Content-Type: application/json" \
-  -d '{"game":"guess_the_ai","event":"session.login","data":{"walletAddress":"0xabc"}}'
+  -d '{"game":"highwayHustle","event":"score.best","data":{"walletAddress":"0xabc","score":9900}}'
 ```
 
-## Using with your existing game backends
-
-From any backend service:
-
-- POST to `http://<da-gateway-host>:3300/v1/events`
-- Send `{ game, event, data }`
-- Keep it fire-and-forget (HTTP 202)
-
-## Best-practice config
-
-Single-service (recommended for your setup):
-
-```env
-DA_TARGET_MODE=local
-DA_WRITER_MODE=mock
-```
-
-When ready for real DA:
+## Production config (0G DA via gRPC)
 
 ```env
 DA_TARGET_MODE=local
 DA_WRITER_MODE=grpc
 DA_WRITER_GRPC_ENDPOINT=127.0.0.1:51001
-DA_WRITER_GRPC_PROTO_PATH=/app/protos/disperser.proto
+DA_WRITER_GRPC_PROTO_PATH=/opt/zero_g_da_event_gateway/protos/disperser.proto
 DA_WRITER_GRPC_SERVICE=disperser.Disperser
 DA_WRITER_GRPC_METHOD=DisperseBlob
 DA_WRITER_GRPC_PAYLOAD_FIELD=data
-# Optional extra request fields as JSON string, example:
-# DA_WRITER_GRPC_EXTRA_JSON={"security_params":[{"quorum_id":0,"adversary_threshold":33,"quorum_threshold":66}]}
+DA_WRITER_GRPC_EXTRA_JSON={"security_params":[{"quorum_id":0,"adversary_threshold":33,"quorum_threshold":66}]}
+REQUIRE_AUTH=true
+INGEST_API_KEY=<strong-secret>
 ```
 
-If you prefer HTTP forwarding instead of direct gRPC:
+For local testing only:
 
 ```env
-DA_TARGET_MODE=local
-DA_WRITER_MODE=http
-DA_WRITER_UPSTREAM_URL=https://<your-da-writer-endpoint>/v1/submit
-DA_WRITER_UPSTREAM_API_KEY=<optional>
+DA_WRITER_MODE=mock
+REQUIRE_AUTH=false
+VALIDATE_EVENT_TYPES=false
 ```
 
-### Notes for 0G DA
+## Live proof
 
-- `DA_WRITER_MODE=grpc` now performs a real gRPC call using your configured proto/service/method.
-- You must provide the correct proto and method signature from your DA client setup.
-- If the request schema differs, set `DA_WRITER_GRPC_PAYLOAD_FIELD` and `DA_WRITER_GRPC_EXTRA_JSON` accordingly.
+Ingest a game event:
 
+```bash
+curl -X POST https://da.warzonewarriors.xyz/v1/events \
+  -H "Authorization: Bearer <INGEST_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"game":"warzoneWarriors","event":"session.completed","data":{"walletAddress":"0xA94965a9dcD684101C7D2C5802ba32230E275093","score":4200}}'
+# → {"success":true,"accepted":1,"queued":1}
+# response includes eventId
+```
+
+Check DA status:
+
+```bash
+curl https://da.warzonewarriors.xyz/v1/da/status/<eventId> \
+  -H "Authorization: Bearer <INGEST_API_KEY>"
+```
+
+Retrieve proof once CONFIRMED:
+
+```bash
+curl https://da.warzonewarriors.xyz/v1/da/proof/<eventId> \
+  -H "Authorization: Bearer <INGEST_API_KEY>"
+# → {"daStatus":"CONFIRMED","storageRoot":"...","epoch":12,"quorumId":0}
+```
+
+## Retry and dead-letter queue
+
+Failed DA submissions are retried up to `MAX_RETRIES` times (default 5) with exponential backoff. Events that exhaust all retries are marked `failed_permanent` and held in the dead-letter queue.
+
+List failed events:
+
+```bash
+curl "https://da.warzonewarriors.xyz/v1/failed-events?game=highwayHustle&limit=20" \
+  -H "Authorization: Bearer <INGEST_API_KEY>"
+```
+
+Replay a specific event:
+
+```bash
+curl -X POST https://da.warzonewarriors.xyz/v1/failed-events/<eventId>/replay \
+  -H "Authorization: Bearer <INGEST_API_KEY>"
+```
+
+## Connecting from game backends
+
+```js
+// fire-and-forget from any backend service
+await fetch("https://da.warzonewarriors.xyz/v1/events", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${process.env.DA_INGEST_KEY}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    game: "highwayHustle",
+    event: "score.best",
+    data: { walletAddress, score, gameMode }
+  })
+});
+```

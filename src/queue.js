@@ -3,10 +3,11 @@ import IORedis from "ioredis";
 import { Queue, QueueEvents, Worker } from "bullmq";
 import { config } from "./config.js";
 import { deliverBatch } from "./delivery.js";
-import { markBatchResult, persistIncomingEvents } from "./store.js";
+import { markBatchResult, persistIncomingEvents, getEventById, resetEventForReplay } from "./store.js";
 
 const QUEUE_NAME = "da_events";
 const nowIso = () => new Date().toISOString();
+
 const chunk = (arr, size) => {
   const out = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -166,5 +167,33 @@ export async function queueStats() {
 
 export function startQueueWorker() {
   ensureQueueReady();
+}
+
+export async function requeueEvent(eventId) {
+  const doc = await getEventById(eventId);
+  if (!doc) throw new Error(`event not found: ${eventId}`);
+  if (doc.finalStatus !== "failed_permanent") {
+    throw new Error(`event cannot be replayed (current status: ${doc.finalStatus})`);
+  }
+  const reset = await resetEventForReplay(eventId);
+  if (!reset) throw new Error("could not reset event for replay");
+  ensureQueueReady();
+  const batchId = randomUUID();
+  await queue.add(
+    "da_event_batch",
+    {
+      batchId,
+      events: [{ eventId: doc.eventId, game: doc.game, event: doc.event, ts: doc.ts, data: doc.data, meta: doc.meta || {} }],
+      createdAt: nowIso()
+    },
+    {
+      jobId: `replay-${randomUUID()}`,
+      attempts: config.maxRetries,
+      backoff: { type: "exponential", delay: config.retryBackoffMs },
+      removeOnComplete: config.bullRemoveOnComplete,
+      removeOnFail: config.bullRemoveOnFail
+    }
+  );
+  return { replayed: true, eventId };
 }
 

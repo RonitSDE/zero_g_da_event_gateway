@@ -129,3 +129,34 @@ export async function getEventById(eventId) {
   if (!eventsCollection || !eventId) return null;
   return eventsCollection.findOne({ eventId: String(eventId) });
 }
+
+export async function getFailedEvents({ limit = 50, skip = 0, game } = {}) {
+  if (!eventsCollection) return [];
+  const filter = { finalStatus: "failed_permanent" };
+  if (game) filter.game = String(game);
+  return eventsCollection
+    .find(filter)
+    .sort({ updatedAt: -1 })
+    .skip(Number(skip))
+    .limit(Number(limit))
+    .toArray();
+}
+
+export async function resetEventForReplay(eventId) {
+  if (!eventsCollection || !eventId) return false;
+  const result = await eventsCollection.updateOne(
+    { eventId: String(eventId), finalStatus: "failed_permanent" },
+    {
+      $set: {
+        status: "queued",
+        finalStatus: "pending",
+        retryCount: 0,
+        error: null,
+        lastError: null,
+        nextRetryAt: null,
+        updatedAt: new Date()
+      }
+    }
+  );
+  return result.modifiedCount > 0;
+}

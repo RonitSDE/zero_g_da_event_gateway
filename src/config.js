@@ -42,5 +42,6 @@ export const config = {
   retryBackoffMs: Math.max(asInt(process.env.RETRY_BACKOFF_MS, 2000), 100),
   bullConcurrency: Math.max(asInt(process.env.BULLMQ_CONCURRENCY, 10), 1),
   bullRemoveOnComplete: Math.max(asInt(process.env.BULLMQ_REMOVE_ON_COMPLETE, 1000), 1),
-  bullRemoveOnFail: Math.max(asInt(process.env.BULLMQ_REMOVE_ON_FAIL, 5000), 1)
+  bullRemoveOnFail: Math.max(asInt(process.env.BULLMQ_REMOVE_ON_FAIL, 5000), 1),
+  requireAuth: (process.env.REQUIRE_AUTH || "false").trim().toLowerCase() === "true"
 };
