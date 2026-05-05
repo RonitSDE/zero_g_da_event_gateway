@@ -12,6 +12,10 @@ function toBase64(value) {
   if (Buffer.isBuffer(value)) return value.toString("base64");
   if (value instanceof Uint8Array) return Buffer.from(value).toString("base64");
   if (typeof value === "string") return Buffer.from(value).toString("base64");
+  // protobuf JSON-like bytes object: { type: 'Buffer', data: [...] }
+  if (typeof value === "object" && Array.isArray(value.data)) {
+    return Buffer.from(value.data).toString("base64");
+  }
   return null;
 }
 
@@ -233,4 +237,3 @@ export async function submitBatchToDa(events) {
     blobInfo: null
   };
 }
-
