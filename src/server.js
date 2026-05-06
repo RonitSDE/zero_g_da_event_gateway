@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import { enqueueEvents, queueStats, requeueEvent, startQueueWorker } from "./queue.js";
 import { getEventById, getFailedEvents, initStore } from "./store.js";
 import { retrieveBlobFromDa } from "./writer.js";
+import { runStartupChecks } from "./startupChecks.js";
 
 if (config.requireAuth && !config.ingestApiKey) {
   console.error("[da-event-gateway] REQUIRE_AUTH=true but INGEST_API_KEY is not set — refusing to start.");
@@ -240,6 +241,13 @@ app.post("/v1/failed-events/:eventId/replay", async (req, res) => {
     return res.status(400).json({ success: false, message: String(error?.message || error) });
   }
 });
+
+try {
+  await runStartupChecks();
+} catch (error) {
+  console.error(`[da-event-gateway] startup checks failed: ${error?.message || error}`);
+  process.exit(1);
+}
 
 await initStore();
 startQueueWorker();

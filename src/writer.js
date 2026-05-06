@@ -60,6 +60,21 @@ function loadGrpcClient() {
   return new ServiceCtor(config.writerGrpcEndpoint, credentials);
 }
 
+export async function checkGrpcReady(timeoutMs = 8000) {
+  const client = loadGrpcClient();
+  try {
+    await new Promise((resolve, reject) => {
+      const deadline = new Date(Date.now() + timeoutMs);
+      client.waitForReady(deadline, (error) => {
+        if (error) return reject(error);
+        return resolve();
+      });
+    });
+  } finally {
+    client.close();
+  }
+}
+
 function writerHeaders() {
   const headers = { "Content-Type": "application/json" };
   if (config.writerApiKey) headers.Authorization = `Bearer ${config.writerApiKey}`;

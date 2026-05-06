@@ -4,6 +4,12 @@ Production event ingestion gateway for Karn games (`highwayHustle`, `guessTheAI`
 
 Accepts events over HTTP, batches them via BullMQ, and submits to the **0G DA disperser over gRPC**. Every event gets a `storageRoot`, `epoch`, and `quorumId` from the DA layer — verifiable proof that the event was committed on-chain.
 
+## Trust model
+
+- This service is an **operator relay** (server-managed ingestion and retries), not a user-signed DA client.
+- DA proof fields are only valid after status reaches `CONFIRMED`/`FINALIZED`; failed jobs do not produce retrievable proof.
+- Production mode should fail closed if upstream DA prerequisites are invalid.
+
 ## Architecture
 
 ```
@@ -114,6 +120,10 @@ DA_WRITER_GRPC_SERVICE=disperser.Disperser
 DA_WRITER_GRPC_METHOD=DisperseBlob
 DA_WRITER_GRPC_PAYLOAD_FIELD=data
 DA_WRITER_GRPC_EXTRA_JSON={"security_params":[{"quorum_id":0,"adversary_threshold":33,"quorum_threshold":66}]}
+DA_STARTUP_STRICT=true
+DA_CHAIN_RPC=https://rpc.ankr.com/0g_galileo_testnet_evm
+DA_EXPECTED_CHAIN_ID=40da
+DA_ENTRANCE_CONTRACT_ADDR=0x...
 REQUIRE_AUTH=true
 INGEST_API_KEY=<strong-secret>
 ```
@@ -170,6 +180,14 @@ Replay a specific event:
 ```bash
 curl -X POST https://da.warzonewarriors.xyz/v1/failed-events/<eventId>/replay \
   -H "Authorization: Bearer <INGEST_API_KEY>"
+```
+
+## E2E smoke tests
+
+```bash
+BASE_URL=http://127.0.0.1:8080 INGEST_API_KEY=<INGEST_API_KEY> npm run test:e2e:da
+# Optional failure assertion:
+# EXPECT_RESULT=failure BASE_URL=http://127.0.0.1:8080 INGEST_API_KEY=<INGEST_API_KEY> npm run test:e2e:da
 ```
 
 ## Connecting from game backends
