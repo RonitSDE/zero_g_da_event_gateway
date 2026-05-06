@@ -58,7 +58,16 @@ export async function deliverBatch(batch) {
   const mode = config.targetMode;
   if (mode === "local") {
     const result = await submitBatchToDa(batch);
-    return { ok: true, mode: `local:${result.mode}`, reference: result.reference, batchId: randomUUID() };
+    return {
+      ok: true,
+      mode: `local:${result.mode}`,
+      reference: result.reference,
+      requestId: result.requestId ?? null,
+      status: result.status ?? null,
+      blobInfo: result.blobInfo ?? null,
+      statusAttempts: Number(result.statusAttempts || 0),
+      batchId: randomUUID()
+    };
   }
   if (mode === "mock") {
     return { ok: true, mode, reference: mockReference(batch), batchId: randomUUID() };
