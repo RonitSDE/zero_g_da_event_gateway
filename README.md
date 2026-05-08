@@ -1,6 +1,6 @@
 # 0G DA Event Gateway
 
-Production event ingestion gateway for Karn games (`highwayHustle`, `guessTheAI`, `warzoneWarriors`).
+Production event ingestion gateway for kult games.
 
 Accepts events over HTTP, batches them via BullMQ, and submits to the **0G DA disperser over gRPC**. Every event gets a `storageRoot`, `epoch`, and `quorumId` from the DA layer — verifiable proof that the event was committed on-chain.
 
